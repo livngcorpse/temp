@@ -92,6 +92,7 @@ router.post('/upload', validateUploadBody, upload.array('files', 10), validateFi
         fileSize: file.size,
         shareLink: `/f/${fileId}`,
         expiresAt: expirationTime,
+        downloadCount: 0,
         passwordProtected: !!passwordHash,
       };
 

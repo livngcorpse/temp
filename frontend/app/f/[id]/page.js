@@ -103,6 +103,7 @@ export default function FilePage({ params }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
   const [passwordProtected, setPasswordProtected] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [timeRemaining, setTimeRemaining] = useState(null);
@@ -167,6 +168,19 @@ export default function FilePage({ params }) {
     }
   }, [id, getExpirationData]);
 
+  // Helper to format a millisecond countdown into H:M:S or M:SS
+  const formatCountdown = (ms) => {
+    if (ms == null || ms <= 0) return '0:00';
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${String(seconds).padStart(2, '0')}s`;
+    }
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  };
+
   async function fetchFileDetails() {
     try {
       const response = await api.get(`/file/${id}`);
@@ -206,7 +220,8 @@ export default function FilePage({ params }) {
 
       if (response.data.success) {
         setPasswordProtected(false);
-        fetchFileDetails();
+        setIsAuthorized(true);
+        setPassword('');
       }
     } catch (err) {
       setPasswordError('Incorrect password');
@@ -413,7 +428,7 @@ export default function FilePage({ params }) {
   }
 
   // Password protected - show password form
-  if (passwordProtected) {
+  if (passwordProtected && !isAuthorized) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
         <motion.div
@@ -590,9 +605,7 @@ export default function FilePage({ params }) {
                 }`}>
                   {getExpirationStatus() === 'expired'
                     ? 'EXPIRED'
-                    : serverExpiration?.formattedTime ||
-                      (timeRemaining && Math.floor(timeRemaining / 1000) + 's') ||
-                      '--:--:--'}
+                    : (timeRemaining ? formatCountdown(timeRemaining) : (serverExpiration?.formattedTime || '--:--'))}
                 </div>
                 <p className="mt-2 text-sm text-slate-500">
                   {expirationStatus === 'expired'

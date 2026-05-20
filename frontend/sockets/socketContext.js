@@ -35,6 +35,7 @@ export const SocketProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [downloadNotifications, setDownloadNotifications] = useState([]);
   const [viewerCounts, setViewerCounts] = useState({});
+  const [downloadCounts, setDownloadCounts] = useState({});
   const [expirationData, setExpirationData] = useState({});
 
   useEffect(() => {
@@ -82,6 +83,10 @@ export const SocketProvider = ({ children }) => {
         },
         ...prev.slice(0, 4), // Keep last 5 notifications
       ]);
+      // Update download counts map for uploader UI
+      if (data.fileId && typeof data.downloadCount === 'number') {
+        setDownloadCounts((prev) => ({ ...prev, [data.fileId]: data.downloadCount }));
+      }
     });
 
     // Listen for viewer count updates (Phase 8)
@@ -101,6 +106,30 @@ export const SocketProvider = ({ children }) => {
           formattedTime: data.formattedTime,
         },
       }));
+    });
+
+    // Listen for uploader initial state
+    newSocket.on('uploaderState', (data) => {
+      console.log('[Socket] Uploader state:', data);
+      if (data.viewerCount !== undefined) {
+        setViewerCounts((prev) => ({ ...prev, [data.fileId]: data.viewerCount }));
+      }
+      if (data.downloadCount !== undefined) {
+        setDownloadCounts((prev) => ({ ...prev, [data.fileId]: data.downloadCount }));
+      }
+      if (data.expirationTimestamp) {
+        const expiresAt = new Date(data.expirationTimestamp);
+        const now = new Date();
+        const diff = expiresAt - now;
+        const hours = Math.floor(diff / 3600000);
+        const minutes = Math.floor((diff % 3600000) / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        const formatted = hours > 0 ? `${hours}h ${minutes}m ${seconds}s` : minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+        setExpirationData((prev) => ({
+          ...prev,
+          [data.fileId]: { timeRemaining: diff, isExpired: diff <= 0, formattedTime: formatted },
+        }));
+      }
     });
 
     setSocket(newSocket);
@@ -145,6 +174,10 @@ export const SocketProvider = ({ children }) => {
     return viewerCounts[fileId] || 0;
   }, [viewerCounts]);
 
+  const getDownloadCount = useCallback((fileId) => {
+    return downloadCounts[fileId] || 0;
+  }, [downloadCounts]);
+
   // Get expiration data for a file
   const getExpirationData = useCallback((fileId) => {
     return expirationData[fileId] || null;
@@ -164,6 +197,7 @@ export const SocketProvider = ({ children }) => {
         clearDownloadNotifications,
         removeDownloadNotification,
         getViewerCount,
+        getDownloadCount,
         getExpirationData,
       }}
     >

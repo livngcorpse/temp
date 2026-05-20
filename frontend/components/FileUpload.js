@@ -78,15 +78,19 @@ function formatExpirationTime(expiresAt) {
 }
 
 export default function FileUpload({ onUploadSuccess }) {
-  const { socket } = useSocket();
+  const { socket, registerUploader, getViewerCount, getExpirationData, getDownloadCount, downloadNotifications } = useSocket();
+  const [recentEvent, setRecentEvent] = useState(null);
+  const [highlight, setHighlight] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [shareUrls, setShareUrls] = useState([]);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedExpiration, setSelectedExpiration] = useState(60);
   const [isPasswordProtected, setIsPasswordProtected] = useState(false);
   const [password, setPassword] = useState('');
+  const [fileCountdowns, setFileCountdowns] = useState({}); // Track countdown per fileId
   const fileInputRef = useRef(null);
 
   const handleDragOver = (e) => {
@@ -114,9 +118,33 @@ export default function FileUpload({ onUploadSuccess }) {
     }
   };
 
-  const handleFileSelect = async (files) => {
-    const selectedFiles = Array.isArray(files) ? files : [files];
-    if (selectedFiles.length === 0) return;
+  const handleFileSelect = (files) => {
+    const selected = Array.isArray(files) ? files : [files];
+    if (selected.length === 0) return;
+
+    setSelectedFiles(selected);
+    setUploadProgress(0);
+    setShareUrls([]);
+  };
+
+  // Helper to format a millisecond countdown into H:M:S or M:SS (matches download page)
+  const formatCountdown = (ms) => {
+    if (ms == null || ms <= 0) return '0:00';
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${String(seconds).padStart(2, '0')}s`;
+    }
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  };
+
+  const handleGenerateLink = async () => {
+    if (!selectedFiles.length) {
+      fileInputRef.current?.click();
+      return;
+    }
 
     setIsUploading(true);
     setUploadProgress(0);
@@ -141,11 +169,19 @@ export default function FileUpload({ onUploadSuccess }) {
       });
 
       setUploadedFiles(response.data.files || []);
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('qd_uploadedFiles', JSON.stringify(response.data.files || []));
+        }
+      } catch (e) {
+        console.warn('Could not persist uploaded files', e);
+      }
+      setSelectedFiles([]);
       onUploadSuccess?.(response.data);
 
-      if (socket && Array.isArray(response.data.files)) {
+      if (Array.isArray(response.data.files)) {
         response.data.files.forEach((file) => {
-          socket.emit('registerUploader', file.fileId);
+          registerUploader(file.fileId);
           console.log('[Socket] Registered as uploader for file:', file.fileId);
         });
       }
@@ -157,12 +193,102 @@ export default function FileUpload({ onUploadSuccess }) {
     }
   };
 
+  // Watch for download notifications relevant to uploaded files and flash UI
+  useEffect(() => {
+    if (!downloadNotifications || downloadNotifications.length === 0) return;
+    if (!uploadedFiles || uploadedFiles.length === 0) return;
+
+    const ids = new Set(uploadedFiles.map((f) => f.fileId));
+    const match = downloadNotifications.find((n) => ids.has(n.fileId));
+    if (match) {
+      setRecentEvent(match);
+      setHighlight(true);
+      const t = setTimeout(() => setHighlight(false), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [downloadNotifications, uploadedFiles]);
+
   useEffect(() => {
     if (!uploadedFiles.length || typeof window === 'undefined') return;
     setShareUrls(
       uploadedFiles.map((file) => `${window.location.origin}${file.shareLink}`)
     );
   }, [uploadedFiles]);
+
+  // Load persisted uploaded files on mount so success screen survives reloads
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem('qd_uploadedFiles');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setUploadedFiles(parsed);
+          setShareUrls(parsed.map((file) => `${window.location.origin}${file.shareLink}`));
+          // register uploader sockets for persisted files
+          parsed.forEach((file) => {
+            registerUploader(file.fileId);
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load persisted uploaded files', e);
+    }
+  }, [registerUploader]);
+
+  // Re-register uploader when socket becomes available
+  useEffect(() => {
+    if (!socket || !uploadedFiles.length) return;
+    uploadedFiles.forEach((file) => {
+      registerUploader(file.fileId);
+    });
+  }, [socket, uploadedFiles, registerUploader]);
+
+  // Initialize and sync file countdowns from socket context or calculate from expiresAt
+  useEffect(() => {
+    if (!uploadedFiles.length) return;
+    setFileCountdowns((prev) => {
+      const updated = { ...prev };
+      uploadedFiles.forEach((file) => {
+        const expirationData = getExpirationData(file.fileId);
+        if (expirationData && expirationData.timeRemaining !== undefined) {
+          // Prefer socket data if available
+          updated[file.fileId] = expirationData.timeRemaining;
+        } else if (file.expiresAt) {
+          // Fall back to calculating from expiresAt timestamp
+          const now = new Date();
+          const expiresAt = new Date(file.expiresAt);
+          const remaining = expiresAt - now;
+          updated[file.fileId] = Math.max(0, remaining);
+        }
+      });
+      return updated;
+    });
+  }, [uploadedFiles, getExpirationData]);
+
+  // Decrement countdowns every second (live countdown effect)
+  useEffect(() => {
+    if (!uploadedFiles.length) return;
+    const t = setInterval(() => {
+      setFileCountdowns((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach((fileId) => {
+          updated[fileId] = Math.max(0, updated[fileId] - 1000);
+        });
+        return updated;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [uploadedFiles.length]);
+
+  // Remove oldnowTick - no longer needed
+  // Tick every second to update expiration displays live (REMOVED - now using fileCountdowns)
+  const [nowTick, setNowTick] = useState(0);
+  useEffect(() => {
+    if (!uploadedFiles.length) return;
+    const t = setInterval(() => setNowTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [uploadedFiles.length]);
 
   if (isUploading) {
     return <UploadCardSkeleton />;
@@ -219,8 +345,19 @@ export default function FileUpload({ onUploadSuccess }) {
               <div className="space-y-2 text-slate-100 font-medium">
                 {uploadedFiles.map((file) => (
                   <div key={file.fileId} className="rounded-2xl bg-slate-900/80 p-3">
-                    <p>{file.fileName}</p>
-                    <p className="text-xs text-slate-500">{(file.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{file.fileName}</p>
+                        <p className="text-xs text-slate-500">{(file.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-slate-300">{getDownloadCount(file.fileId) || file.downloadCount || 0} downloads</p>
+                        <p className="text-xs text-slate-500">viewers: {getViewerCount(file.fileId) || 0}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs text-slate-400">
+                      Expires in: {formatCountdown(fileCountdowns[file.fileId] ?? 0)}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -259,7 +396,7 @@ export default function FileUpload({ onUploadSuccess }) {
                     Copy
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">Expires in {formatExpirationTime(file.expiresAt)}</p>
+                <p className="text-xs text-slate-500">Expires in {formatCountdown(fileCountdowns[file.fileId] ?? 0)}</p>
               </div>
             ))}
           </div>
@@ -268,6 +405,12 @@ export default function FileUpload({ onUploadSuccess }) {
             onClick={() => {
               setUploadedFiles([]);
               setUploadProgress(0);
+              setShareUrls([]);
+              try {
+                if (typeof window !== 'undefined') localStorage.removeItem('qd_uploadedFiles');
+              } catch (e) {
+                console.warn('Failed to clear persisted uploaded files', e);
+              }
             }}
             className="mt-6 w-full rounded-full bg-slate-800 px-5 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-700 transition"
           >
@@ -283,11 +426,27 @@ export default function FileUpload({ onUploadSuccess }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="rounded-3xl bg-slate-900/80 p-8 shadow-[0_0_60px_rgba(15,23,42,0.4)] backdrop-blur"
+      className={`rounded-3xl bg-slate-900/80 p-8 shadow-[0_0_60px_rgba(15,23,42,0.4)] backdrop-blur ${
+        highlight ? 'ring-2 ring-emerald-400/30 animate-pulse' : ''
+      }`}
       aria-label="File upload section"
     >
       <div className="space-y-4">
+        {/* Toast for recent events */}
+        {recentEvent && (
+          <div className="fixed right-6 top-6 z-50">
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="rounded-lg bg-slate-800/90 px-4 py-2 text-sm text-slate-100 shadow-lg"
+            >
+              {recentEvent.fileName} was downloaded
+            </motion.div>
+          </div>
+        )}
         <motion.div
+          onClick={() => fileInputRef.current?.click()}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -314,6 +473,25 @@ export default function FileUpload({ onUploadSuccess }) {
         >
           {isUploading ? (
             <UploadSkeleton />
+          ) : selectedFiles.length > 0 ? (
+            <div className="mt-10 flex h-full flex-col items-center justify-center gap-3 text-left">
+              <div className="text-slate-300 text-sm font-semibold">
+                {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} ready to upload
+              </div>
+              <div className="max-h-40 w-full overflow-auto rounded-2xl bg-slate-950/80 p-3 text-slate-300 shadow-inner">
+                {selectedFiles.slice(0, 3).map((file) => (
+                  <p key={file.name} className="truncate text-sm">
+                    {file.name}
+                  </p>
+                ))}
+                {selectedFiles.length > 3 && (
+                  <p className="text-xs text-slate-500">+{selectedFiles.length - 3} more</p>
+                )}
+              </div>
+              <p className="text-sm text-slate-500">
+                Click this area again to change files or press Generate link when ready.
+              </p>
+            </div>
           ) : (
             <div className="mt-10 flex h-full flex-col items-center justify-center gap-3">
               <div
@@ -332,6 +510,28 @@ export default function FileUpload({ onUploadSuccess }) {
             </div>
           )}
         </motion.div>
+
+        {/* Compact live-stats panel (before generating link) */}
+        {selectedFiles.length > 0 && (
+          <div className="rounded-2xl bg-slate-950/50 p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500">Selected</p>
+              <p className="text-sm font-medium text-slate-100">{selectedFiles.length} file{selectedFiles.length>1?'s':''}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Expiration</p>
+              <p className="text-sm text-slate-100">{expirationOptions.find(o => o.value === selectedExpiration)?.label || 'Custom'}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Viewers</p>
+              <p className="text-sm text-slate-100">--</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Downloads</p>
+              <p className="text-sm text-slate-100">--</p>
+            </div>
+          </div>
+        )}
 
         {/* Expiration Selector */}
         <div className="rounded-2xl bg-slate-950/50 p-4">
@@ -391,12 +591,12 @@ export default function FileUpload({ onUploadSuccess }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={handleGenerateLink}
             disabled={isUploading}
             className="rounded-full bg-sky-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            aria-label="Select files to upload"
+            aria-label={selectedFiles.length > 0 ? 'Generate share link' : 'Select files to upload'}
           >
-            Select files
+            {selectedFiles.length > 0 ? 'Generate link' : 'Select files'}
           </button>
 
           <button

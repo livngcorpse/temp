@@ -5,6 +5,8 @@ const uploaderSockets = new Map();
 
 // Track viewer counts per file: { fileId: count }
 const viewerCounts = new Map();
+// Track which file rooms each socket has joined: { socketId: Set<fileId> }
+const socketFileRooms = new Map();
 
 /**
  * Initialize Socket.IO server
@@ -20,31 +22,78 @@ function initializeSocket(server) {
   io.on('connection', (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);
 
-    // Track uploader socket association
-    socket.on('registerUploader', (fileId) => {
+    // Track uploader socket association and send initial state
+    socket.on('registerUploader', async (fileId) => {
       uploaderSockets.set(fileId, socket.id);
       console.log(`[Socket] Uploader registered for file: ${fileId}`);
+
+      try {
+        // Send current viewer count
+        const currentViewers = viewerCounts.get(fileId) || 0;
+        io.to(socket.id).emit('viewerCountUpdate', { fileId, count: currentViewers });
+
+        // Fetch download count and expiration from DB
+        const pool = require('./db');
+        const result = await pool.query('SELECT download_count, expiration_timestamp FROM files WHERE id = $1', [fileId]);
+        if (result.rows.length > 0) {
+          const row = result.rows[0];
+          const downloadCount = row.download_count || 0;
+          io.to(socket.id).emit('uploaderState', {
+            fileId,
+            viewerCount: currentViewers,
+            downloadCount,
+            expirationTimestamp: row.expiration_timestamp,
+          });
+        }
+      } catch (err) {
+        console.error('[Socket] Error fetching uploader initial state:', err.message);
+      }
     });
 
     // Join file viewer room
     socket.on('joinFile', (fileId) => {
-      socket.join(fileId);
-      viewerCounts.set(fileId, (viewerCounts.get(fileId) || 0) + 1);
-      console.log(`[Socket] Client joined file room: ${fileId} (count: ${viewerCounts.get(fileId)})`);
+      const rooms = socketFileRooms.get(socket.id) || new Set();
+      if (!rooms.has(fileId)) {
+        socket.join(fileId);
+        rooms.add(fileId);
+        socketFileRooms.set(socket.id, rooms);
+        viewerCounts.set(fileId, (viewerCounts.get(fileId) || 0) + 1);
+        console.log(`[Socket] Client joined file room: ${fileId} (count: ${viewerCounts.get(fileId)})`);
 
-      // Update viewer count for all clients
-      io.to(fileId).emit('viewerCountUpdate', { fileId, count: viewerCounts.get(fileId) });
+        // Update viewer count for all clients
+          io.to(fileId).emit('viewerCountUpdate', { fileId, count: viewerCounts.get(fileId) });
+          // Also notify uploader directly if registered
+          const uploaderSocketId = uploaderSockets.get(fileId);
+          if (uploaderSocketId) {
+            io.to(uploaderSocketId).emit('viewerCountUpdate', { fileId, count: viewerCounts.get(fileId) });
+          }
+      }
     });
 
     // Leave file viewer room
     socket.on('leaveFile', (fileId) => {
-      socket.leave(fileId);
-      if (viewerCounts.has(fileId)) {
-        viewerCounts.set(fileId, viewerCounts.get(fileId) - 1);
-        if (viewerCounts.get(fileId) <= 0) {
-          viewerCounts.delete(fileId);
+      const rooms = socketFileRooms.get(socket.id);
+      if (rooms && rooms.has(fileId)) {
+        socket.leave(fileId);
+        rooms.delete(fileId);
+        if (rooms.size === 0) {
+          socketFileRooms.delete(socket.id);
         } else {
-          io.to(fileId).emit('viewerCountUpdate', { fileId, count: viewerCounts.get(fileId) });
+          socketFileRooms.set(socket.id, rooms);
+        }
+
+        if (viewerCounts.has(fileId)) {
+          viewerCounts.set(fileId, viewerCounts.get(fileId) - 1);
+          const newCount = viewerCounts.get(fileId);
+          if (newCount <= 0) {
+            viewerCounts.delete(fileId);
+          }
+          io.to(fileId).emit('viewerCountUpdate', { fileId, count: Math.max(0, newCount) });
+          // Also notify uploader directly if registered
+          const uploaderSocketId = uploaderSockets.get(fileId);
+          if (uploaderSocketId) {
+            io.to(uploaderSocketId).emit('viewerCountUpdate', { fileId, count: Math.max(0, newCount) });
+          }
         }
       }
       console.log(`[Socket] Client left file room: ${fileId}`);
@@ -59,6 +108,23 @@ function initializeSocket(server) {
           uploaderSockets.delete(fileId);
           console.log(`[Socket] Uploader socket cleaned up for file: ${fileId}`);
         }
+      }
+
+      // Clean up viewers on disconnect if the socket left without sending leaveFile
+      const rooms = socketFileRooms.get(socket.id);
+      if (rooms) {
+        rooms.forEach((fileId) => {
+          if (viewerCounts.has(fileId)) {
+            viewerCounts.set(fileId, viewerCounts.get(fileId) - 1);
+            const newCount = viewerCounts.get(fileId);
+            if (newCount <= 0) {
+              viewerCounts.delete(fileId);
+            }
+            io.to(fileId).emit('viewerCountUpdate', { fileId, count: Math.max(0, newCount) });
+          }
+          console.log(`[Socket] Client disconnected and left file room: ${fileId}`);
+        });
+        socketFileRooms.delete(socket.id);
       }
 
       // Clean up viewer counts (simplified - real cleanup happens on leaveFile)
@@ -114,6 +180,11 @@ function emitDownloadNotification(fileId, downloadData) {
 function emitViewerCountUpdate(fileId, count) {
   if (!io) return;
   io.to(fileId).emit('viewerCountUpdate', { fileId, count });
+  // Also notify uploader socket directly if registered so uploader UI receives live counts
+  const uploaderSocketId = uploaderSockets.get(fileId);
+  if (uploaderSocketId) {
+    io.to(uploaderSocketId).emit('viewerCountUpdate', { fileId, count });
+  }
 }
 
 // Track expiration info for files: { fileId: { expiresAt, lastNotified } }
@@ -207,6 +278,21 @@ async function emitExpirationUpdates() {
           ? `${minutes}m ${seconds}s`
           : `${seconds}s`,
     });
+    // Also notify uploader directly if present
+    const uploaderSocketId = uploaderSockets.get(fileId);
+    if (uploaderSocketId) {
+      io.to(uploaderSocketId).emit('expirationUpdate', {
+        fileId,
+        timeRemaining: diff,
+        isExpired: diff <= 0,
+        formattedTime:
+          hours > 0
+            ? `${hours}h ${minutes}m ${seconds}s`
+            : minutes > 0
+            ? `${minutes}m ${seconds}s`
+            : `${seconds}s`,
+      });
+    }
   }
 }
 
