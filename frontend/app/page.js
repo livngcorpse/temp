@@ -64,7 +64,7 @@ export default function Home() {
               </div>
             </div>
             <div className="space-y-3 rounded-3xl bg-slate-950/90 p-4">
-              <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Phase 2 features</p>
+              <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Core features</p>
               <ul className="space-y-3 text-slate-400">
                 <li>✓ Upload files instantly</li>
                 <li>✓ Generate share links</li>

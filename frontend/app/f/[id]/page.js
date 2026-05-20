@@ -7,6 +7,94 @@ import { QRCodeSVG } from 'qrcode.react';
 import { api } from '@/lib/api';
 import { useSocket } from '@/sockets/socketContext';
 
+function FilePageSkeleton() {
+  return (
+    <div className="min-h-screen bg-slate-950 px-4 py-12">
+      <div className="mx-auto max-w-5xl animate-pulse space-y-8">
+        <div className="flex items-center justify-between gap-4">
+          <div className="h-8 w-48 rounded-full bg-slate-800" />
+          <div className="h-8 w-24 rounded-full bg-slate-800" />
+        </div>
+
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="h-[360px] rounded-3xl bg-slate-900/80 border border-slate-800" />
+            <div className="h-40 rounded-3xl bg-slate-900/80 border border-slate-800" />
+            <div className="h-64 rounded-3xl bg-slate-900/80 border border-slate-800" />
+          </div>
+
+          <div className="space-y-6">
+            <div className="h-80 rounded-3xl bg-slate-900/80 border border-slate-800" />
+            <div className="h-56 rounded-3xl bg-slate-900/80 border border-slate-800" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getFileTypeIcon(mimeType) {
+  if (!mimeType) {
+    return (
+      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+      </svg>
+    );
+  }
+
+  if (mimeType.startsWith('image/')) {
+    return (
+      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a4 4 0 014-4h10a4 4 0 014 4v10a4 4 0 01-4 4H7a4 4 0 01-4-4V7z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12l2 2 4-4 4 4" />
+      </svg>
+    );
+  }
+
+  if (mimeType === 'application/pdf') {
+    return (
+      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2h6a2 2 0 012 2v16a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h6z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2v6h6" />
+      </svg>
+    );
+  }
+
+  if (mimeType.startsWith('video/')) {
+    return (
+      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h12v12H4z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l5 4-5 4V8z" />
+      </svg>
+    );
+  }
+
+  if (mimeType.startsWith('audio/')) {
+    return (
+      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 18V5l12-2v13" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 18a3 3 0 01-3-3 3 3 0 013-3" />
+      </svg>
+    );
+  }
+
+  if (mimeType.startsWith('text/')) {
+    return (
+      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 6h8M8 10h8M8 14h5" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 4h12v16H6V4z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 2h9l5 5v15a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 2v5h5" />
+    </svg>
+  );
+}
+
 export default function FilePage({ params }) {
   const { id } = params;
   const { joinFileRoom, leaveFileRoom, getViewerCount, getExpirationData } = useSocket();
@@ -294,15 +382,7 @@ export default function FilePage({ params }) {
 
   // Loading state
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <motion.div
-          animate={{ scale: [1, 1.2, 1] }}
-          transition={{ repeat: Infinity, duration: 1 }}
-          className="h-12 w-12 rounded-full border-4 border-sky-500/30 border-t-sky-500"
-        />
-      </div>
-    );
+    return <FilePageSkeleton />;
   }
 
   // Error state
@@ -534,9 +614,14 @@ export default function FilePage({ params }) {
 
                 <div className="mt-4 space-y-4">
                   <div className="flex items-start justify-between py-3 border-b border-slate-800/50">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium uppercase tracking-wider text-slate-500">File Name</p>
-                      <p className="text-slate-200 font-medium break-all">{fileData?.originalName}</p>
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-800 text-slate-300">
+                        {getFileTypeIcon(fileData?.mimeType)}
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium uppercase tracking-wider text-slate-500">File Name</p>
+                        <p className="text-slate-200 font-medium break-all">{fileData?.originalName}</p>
+                      </div>
                     </div>
                   </div>
 

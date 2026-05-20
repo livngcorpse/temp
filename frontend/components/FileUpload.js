@@ -32,6 +32,32 @@ function UploadSkeleton() {
   );
 }
 
+function UploadCardSkeleton() {
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="rounded-3xl bg-slate-900/80 p-8 shadow-[0_0_60px_rgba(15,23,42,0.4)] backdrop-blur"
+    >
+      <div className="space-y-6 animate-pulse">
+        <div className="rounded-3xl border border-slate-700/50 bg-slate-950/50 p-6">
+          <UploadSkeleton />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="h-24 rounded-3xl bg-slate-950/50 border border-slate-700/50" />
+          <div className="h-24 rounded-3xl bg-slate-950/50 border border-slate-700/50" />
+        </div>
+        <div className="space-y-3">
+          <div className="h-4 w-40 rounded bg-slate-700/30" />
+          <div className="h-4 rounded bg-slate-700/30" />
+          <div className="h-12 rounded-full bg-slate-700/30" />
+        </div>
+      </div>
+    </motion.section>
+  );
+}
+
 // Format expiration time for display
 function formatExpirationTime(expiresAt) {
   if (!expiresAt) return 'Unknown';
@@ -137,6 +163,10 @@ export default function FileUpload({ onUploadSuccess }) {
       uploadedFiles.map((file) => `${window.location.origin}${file.shareLink}`)
     );
   }, [uploadedFiles]);
+
+  if (isUploading) {
+    return <UploadCardSkeleton />;
+  }
 
   if (uploadedFiles.length > 0) {
     const firstFile = uploadedFiles[0];

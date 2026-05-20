@@ -2,9 +2,10 @@
   "compilerOptions": {
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
+    "jsx": "preserve",
     "paths": {
       "@/*": ["./*"]
     }
   },
-  "include": ["next.config.js", "**/*.ts", "**/*.tsx"]
+  "include": ["next.config.js", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx"]
 }

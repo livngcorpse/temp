@@ -5,18 +5,20 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSocket } from '@/sockets/socketContext';
 
 export default function DownloadNotificationToast() {
-  const { downloadNotifications, clearDownloadNotifications } = useSocket();
+  const { downloadNotifications, removeDownloadNotification } = useSocket();
 
-  // Auto-clear notifications after 5 seconds
+  // Auto-clear each notification after 5 seconds
   useEffect(() => {
     if (downloadNotifications.length === 0) return;
 
-    const timer = setTimeout(() => {
-      clearDownloadNotifications();
-    }, 5000);
+    const timers = downloadNotifications.map((notification) =>
+      window.setTimeout(() => {
+        removeDownloadNotification(notification.id);
+      }, 5000)
+    );
 
-    return () => clearTimeout(timer);
-  }, [downloadNotifications, clearDownloadNotifications]);
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [downloadNotifications, removeDownloadNotification]);
 
   if (downloadNotifications.length === 0) {
     return null;
@@ -60,7 +62,7 @@ export default function DownloadNotificationToast() {
               </div>
               <button
                 onClick={() => {
-                  clearDownloadNotifications();
+                  removeDownloadNotification(notification.id);
                 }}
                 className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition focus:outline-none focus:ring-2 focus:ring-sky-500/50"
                 aria-label="Dismiss notification"

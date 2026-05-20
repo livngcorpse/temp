@@ -3,7 +3,24 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
-const SocketContext = createContext(null);
+/**
+ * @typedef {{
+ *   socket: any;
+ *   isConnected: boolean;
+ *   downloadNotifications: Array<{ id: number; fileId: string; fileName: string; timestamp: string }>;
+ *   viewerCounts: Record<string, number>;
+ *   expirationData: Record<string, any>;
+ *   registerUploader: (fileId: string) => void;
+ *   joinFileRoom: (fileId: string) => void;
+ *   leaveFileRoom: (fileId: string) => void;
+ *   clearDownloadNotifications: () => void;
+ *   removeDownloadNotification: (id: number) => void;
+ *   getViewerCount: (fileId: string) => number;
+ *   getExpirationData: (fileId: string) => any;
+ * }} SocketContextValue
+ */
+
+const SocketContext = createContext(/** @type {SocketContextValue | null} */ (null));
 
 export const useSocket = () => {
   const context = useContext(SocketContext);
@@ -119,6 +136,10 @@ export const SocketProvider = ({ children }) => {
     setDownloadNotifications([]);
   }, []);
 
+  const removeDownloadNotification = useCallback((id) => {
+    setDownloadNotifications((prev) => prev.filter((notification) => notification.id !== id));
+  }, []);
+
   // Get viewer count for a file
   const getViewerCount = useCallback((fileId) => {
     return viewerCounts[fileId] || 0;
@@ -141,6 +162,7 @@ export const SocketProvider = ({ children }) => {
         joinFileRoom,
         leaveFileRoom,
         clearDownloadNotifications,
+        removeDownloadNotification,
         getViewerCount,
         getExpirationData,
       }}
