@@ -1,0 +1,464 @@
+PHASE 1 — PROJECT FOUNDATION
+
+Goal:
+Create a stable frontend + backend foundation with clean architecture.
+
+Requirements:
+
+setup Next.js frontend
+setup Express backend
+setup PostgreSQL connection
+setup Tailwind CSS
+setup environment variables
+setup API communication
+setup folder structure
+setup Git repository
+
+Frontend:
+
+landing page placeholder
+global layout
+API utility setup
+dark theme foundation
+
+Backend:
+
+Express server
+middleware setup
+health check route
+PostgreSQL connection
+request logging
+
+Success Criteria:
+
+frontend runs successfully
+backend runs successfully
+database connects successfully
+frontend communicates with backend
+
+Rollback Point:
+Application remains functional as a basic full-stack app.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 2 — BASIC FILE UPLOAD SYSTEM
+
+Goal:
+Implement reliable anonymous file uploads.
+
+Requirements:
+
+drag/drop upload UI
+upload endpoint
+Multer integration
+local file storage
+metadata database storage
+unique file identifiers
+upload validation
+
+Backend:
+
+POST /upload
+file size limits
+MIME validation
+UUID filename generation
+upload metadata persistence
+
+Database:
+
+Files table operational.
+
+Frontend:
+
+upload interface
+upload success screen
+generated share links
+
+Success Criteria:
+
+files upload successfully
+metadata stored correctly
+files accessible from server
+generated links work correctly
+
+Rollback Point:
+Working temporary file uploader exists.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 3 — DOWNLOAD PAGE SYSTEM
+
+Goal:
+Allow users to access and download uploaded files.
+
+Requirements:
+
+file detail page
+metadata display
+download endpoint
+file preview rendering
+expiration display
+
+Backend:
+
+GET /file/:id
+download streaming
+file existence validation
+download count updates
+
+Frontend:
+
+download page UI
+preview rendering
+responsive layout
+
+Success Criteria:
+
+files downloadable
+previews functional
+invalid files handled gracefully
+
+Rollback Point:
+Working upload/download platform exists.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 4 — FILE EXPIRATION SYSTEM
+
+Goal:
+Implement automatic temporary file cleanup.
+
+Requirements:
+
+expiration timestamps
+expiration selector
+cron cleanup jobs
+expired file invalidation
+
+Backend:
+
+node-cron cleanup service
+expired file deletion
+database cleanup
+
+Frontend:
+
+expiration selector UI
+expiration status display
+
+Success Criteria:
+
+expired files deleted automatically
+expired links invalidated correctly
+cleanup jobs stable
+
+Rollback Point:
+Stable temporary file sharing platform.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 5 — SOCKET.IO FOUNDATION
+
+Goal:
+Introduce realtime infrastructure safely.
+
+Requirements:
+
+Socket.IO backend integration
+client socket setup
+connection management
+reconnect handling
+
+Backend:
+
+websocket initialization
+socket event architecture
+
+Frontend:
+
+socket provider
+socket lifecycle handling
+
+Success Criteria:
+
+sockets connect reliably
+reconnect behavior stable
+core uploads unaffected by socket failures
+
+Rollback Point:
+Core application functional without realtime layer.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 6 — REALTIME UPLOAD PROGRESS
+
+Goal:
+Display live upload progress updates.
+
+Requirements:
+
+realtime upload events
+animated progress bars
+upload state synchronization
+
+Backend:
+
+emit upload progress events
+
+Frontend:
+
+progress UI
+percentage indicators
+smooth progress animations
+
+Success Criteria:
+
+upload progress updates smoothly
+uploads remain stable during realtime updates
+
+Rollback Point:
+Realtime layer removable independently.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 7 — DOWNLOAD NOTIFICATIONS
+
+Goal:
+Notify uploaders when downloads occur.
+
+Requirements:
+
+download event tracking
+uploader socket association
+live notifications
+
+Backend:
+
+emit download events
+
+Frontend:
+
+toast notifications
+notification state handling
+
+Success Criteria:
+
+uploader receives instant download notifications
+notification failures do not affect downloads
+
+Rollback Point:
+Notification system isolated from core file flow.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 8 — LIVE VIEWER COUNT
+
+Goal:
+Track active users viewing file pages.
+
+Requirements:
+
+socket room tracking
+active viewer counting
+disconnect cleanup
+
+Backend:
+
+join/leave room logic
+viewer session tracking
+
+Frontend:
+
+live viewer counter component
+
+Success Criteria:
+
+viewer counts accurate
+disconnects handled properly
+stale sessions cleaned safely
+
+Rollback Point:
+Presence layer removable independently.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 9 — LIVE EXPIRATION COUNTDOWN
+
+Goal:
+Display synchronized realtime expiration timers.
+
+Requirements:
+
+realtime countdown synchronization
+expiration state auto-refresh
+
+Frontend:
+
+animated countdown component
+expired state handling
+
+Success Criteria:
+
+countdown timers accurate
+expiration updates instantly
+expired state reflected without refresh
+
+Rollback Point:
+Only affects presentation layer.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 10 — PASSWORD PROTECTION
+
+Goal:
+Secure sensitive uploads using password protection.
+
+Requirements:
+
+password-protected uploads
+bcrypt hashing
+password verification endpoint
+protected downloads
+
+Backend:
+
+secure password middleware
+hash verification
+rate limited verification attempts
+
+Frontend:
+
+password modal
+protected file flow
+validation states
+
+Success Criteria:
+
+protected files inaccessible without password
+hashes stored securely
+brute force attempts limited safely
+
+Rollback Point:
+Password system isolated from normal uploads.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 11 — FILE SECURITY HARDENING
+
+Goal:
+Protect application against abuse and malicious uploads.
+
+Requirements:
+
+rate limiting
+MIME validation
+secure headers
+sanitized filenames
+upload throttling
+
+Backend:
+
+Helmet integration
+express-rate-limit
+validation middleware
+upload sanitization
+
+Success Criteria:
+
+malicious uploads blocked
+spam upload attempts throttled
+app stable under abuse scenarios
+
+Rollback Point:
+Security middleware removable independently.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 12 — UI/UX POLISH
+
+Goal:
+Make the application feel production-grade.
+
+Requirements:
+
+Framer Motion animations
+polished transitions
+skeleton loaders
+responsive design improvements
+glassmorphism refinement
+
+Frontend:
+
+animation polish
+loading states
+accessibility improvements
+
+Success Criteria:
+
+smooth interactions across devices
+polished visual consistency
+responsive behavior stable
+
+Rollback Point:
+Purely visual phase.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 13 — PERFORMANCE OPTIMIZATION
+
+Goal:
+Improve responsiveness and scalability.
+
+Requirements:
+
+lazy loading
+query optimization
+socket optimization
+caching strategies
+preview optimization
+
+Success Criteria:
+
+faster load times
+reduced server load
+smoother realtime performance
+
+Rollback Point:
+Performance improvements isolated from business logic.
+
+━━━━━━━━━━━━━━━━━━
+
+PHASE 14 — FINAL PRODUCTION STABILIZATION
+
+Goal:
+Prepare the application for deployment.
+
+Requirements:
+
+environment validation
+centralized error handling
+structured logging
+monitoring hooks
+API validation
+deployment testing
+
+Success Criteria:
+
+stable production build
+no critical regressions
+reliable recovery behavior
+deployment-ready architecture
+
+Final Result:
+A polished realtime temporary file sharing platform with:
+
+anonymous uploads
+temporary share links
+realtime upload progress
+download notifications
+live viewer counts
+expiration timers
+password protection
+automatic cleanup
+polished UX
+production-ready architecture

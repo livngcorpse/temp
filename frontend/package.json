@@ -1,0 +1,25 @@
+{
+  "name": "quickdrop-core-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "axios": "^1.5.0",
+    "framer-motion": "^11.3.6",
+    "next": "14.2.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "qrcode.react": "^4.1.0",
+    "socket.io-client": "^4.8.3",
+    "zustand": "^4.5.1"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.40",
+    "tailwindcss": "^3.4.5"
+  }
+}

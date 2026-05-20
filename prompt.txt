@@ -1,0 +1,407 @@
+PROMPT 1 — QUICKDROP CORE
+Build a modern full-stack web application called “QuickDrop Core” — a temporary file sharing platform focused on speed, simplicity, realtime feedback, and clean UX.
+
+The application should feel like a polished production-grade product similar to WeTransfer, but faster, lighter, and more developer-focused.
+
+━━━━━━━━━━━━━━━━━━
+CORE PURPOSE
+━━━━━━━━━━━━━━━━━━
+
+Users can:
+
+upload files instantly
+generate temporary share links
+share files without requiring signup
+set expiration times
+optionally protect files with passwords
+receive realtime updates about uploads and downloads
+
+The platform should prioritize:
+
+fast uploads
+minimal UI
+realtime feedback
+smooth interactions
+temporary storage
+automatic cleanup
+
+The application should remain lightweight, anonymous-first, and optimized for rapid file sharing.
+
+━━━━━━━━━━━━━━━━━━
+TECH STACK
+━━━━━━━━━━━━━━━━━━
+
+Frontend:
+
+React
+Next.js (App Router)
+Tailwind CSS
+Framer Motion for animations
+Socket.IO client
+Axios
+Zustand for lightweight state management
+
+Backend:
+
+Node.js
+Express.js
+Socket.IO
+Multer for file uploads
+bcrypt for password hashing
+node-cron for cleanup jobs
+
+Database:
+
+PostgreSQL
+
+Storage:
+
+Local filesystem storage initially using "/uploads"
+File metadata stored in PostgreSQL
+
+Realtime:
+
+Socket.IO
+
+Deployment-ready architecture:
+
+frontend and backend separated cleanly
+environment variable configuration
+REST API architecture
+scalable folder structure
+
+━━━━━━━━━━━━━━━━━━
+APPLICATION FEATURES
+━━━━━━━━━━━━━━━━━━
+
+1. LANDING PAGE
+
+The homepage should be minimal, modern, and upload-focused.
+
+Main elements:
+
+large drag-and-drop upload area
+upload button
+expiration selector
+optional password protection
+animated background
+responsive design
+
+UX behavior:
+
+drag-over animations
+smooth upload transitions
+instant feedback
+mobile-friendly interactions
+
+The upload experience should feel extremely fast and frictionless.
+
+━━━━━━━━━━━━━━━━━━
+2. FILE UPLOAD SYSTEM
+━━━━━━━━━━━━━━━━━━
+
+Users can:
+
+drag/drop files
+select multiple files
+upload any file type
+see upload progress in realtime
+
+Each upload generates:
+
+unique file ID
+shareable URL
+expiration timestamp
+
+Example link:
+
+"/f/ab29xk92"
+
+Backend behavior:
+
+store uploaded files physically inside "/uploads"
+store metadata in PostgreSQL
+generate UUID-based identifiers
+
+Uploaded file metadata:
+
+file name
+original name
+size
+MIME type
+upload timestamp
+expiration timestamp
+uploader IP
+password hash if protected
+download count
+
+━━━━━━━━━━━━━━━━━━
+3. REALTIME FEATURES
+━━━━━━━━━━━━━━━━━━
+
+Use Socket.IO throughout the application.
+
+Realtime capabilities:
+
+A. Live Upload Progress
+
+progress bars update in realtime
+upload percentages update smoothly
+upload states synchronized properly
+
+B. Download Notifications
+
+Uploader receives live notification:
+
+“Someone downloaded your file.”
+
+C. Active Viewer Count
+
+Display live viewer presence:
+
+“3 people viewing this file.”
+
+D. Live Expiration Countdown
+
+Every file page should display a realtime countdown:
+
+“Expires in 01:23:42”
+
+Realtime systems should remain isolated from core upload logic so the application still functions if sockets fail.
+
+━━━━━━━━━━━━━━━━━━
+4. DOWNLOAD PAGE
+━━━━━━━━━━━━━━━━━━
+
+Each uploaded file has its own download page.
+
+Display:
+
+file name
+file size
+upload timestamp
+expiration countdown
+download count
+preview if supported
+download button
+
+Supported previews:
+
+images
+PDFs
+videos
+text files
+
+If file is password protected:
+
+show password prompt before access
+
+If file is expired:
+
+show elegant expiration screen
+file becomes inaccessible
+
+━━━━━━━━━━━━━━━━━━
+5. PASSWORD PROTECTION
+━━━━━━━━━━━━━━━━━━
+
+Users can optionally protect files using passwords.
+
+Requirements:
+
+passwords hashed using bcrypt
+never store plain text passwords
+protected files require verification before download
+secure password validation endpoint
+
+Frontend:
+
+password modal
+elegant validation states
+smooth error handling
+
+Backend:
+
+secure hash comparison
+rate limited verification attempts
+
+━━━━━━━━━━━━━━━━━━
+6. FILE EXPIRATION SYSTEM
+━━━━━━━━━━━━━━━━━━
+
+Files automatically expire after a selected duration.
+
+Expiration options:
+
+1 hour
+24 hours
+7 days
+custom expiration
+
+When expired:
+
+file removed from filesystem
+database record deleted
+download URL invalidated
+
+Use:
+
+node-cron cleanup jobs
+
+Cleanup behavior:
+
+periodic expiration scanning
+safe file deletion
+orphaned file cleanup
+
+━━━━━━━━━━━━━━━━━━
+7. FILE SECURITY
+━━━━━━━━━━━━━━━━━━
+
+Security requirements:
+
+file size limits
+MIME validation
+upload throttling
+secure headers
+sanitized filenames
+rate limiting
+
+Prevent:
+
+malicious uploads
+path traversal
+arbitrary file execution
+spam uploads
+
+Use:
+
+Helmet middleware
+Express rate limiting
+validation middleware
+
+━━━━━━━━━━━━━━━━━━
+8. DATABASE DESIGN
+━━━━━━━━━━━━━━━━━━
+
+Create PostgreSQL schema for:
+
+Files
+
+id
+filename
+original_name
+size
+mime_type
+path
+password_hash
+expires_at
+created_at
+download_count
+
+Optional UploadSessions table:
+
+id
+upload_token
+socket_id
+created_at
+
+━━━━━━━━━━━━━━━━━━
+9. API ARCHITECTURE
+━━━━━━━━━━━━━━━━━━
+
+Implement REST APIs for:
+
+upload file
+fetch file info
+download file
+verify password
+fetch expiration status
+
+Use:
+
+modular controller architecture
+service layer separation
+reusable middleware
+centralized validation
+
+━━━━━━━━━━━━━━━━━━
+10. FRONTEND UI/UX
+━━━━━━━━━━━━━━━━━━
+
+Design style:
+
+modern dark theme
+glassmorphism cards
+clean typography
+smooth transitions
+responsive layout
+
+Use Framer Motion for:
+
+upload animations
+modal transitions
+realtime UI updates
+notifications
+
+Include:
+
+toast notifications
+skeleton loaders
+drag-and-drop hover effects
+animated countdown timers
+
+━━━━━━━━━━━━━━━━━━
+11. PROJECT STRUCTURE
+━━━━━━━━━━━━━━━━━━
+
+Frontend structure:
+
+app
+components
+hooks
+services
+sockets
+store
+utils
+
+Backend structure:
+
+controllers
+routes
+middleware
+services
+sockets
+uploads
+cron jobs
+database
+
+━━━━━━━━━━━━━━━━━━
+12. OPTIONAL PREMIUM FEEL FEATURES
+━━━━━━━━━━━━━━━━━━
+
+Include:
+
+QR code generation for share links
+copy-to-clipboard interactions
+upload speed indicators
+file type icons
+animated success screens
+beautiful empty states
+
+━━━━━━━━━━━━━━━━━━
+13. FINAL PRODUCT EXPECTATION
+━━━━━━━━━━━━━━━━━━
+
+The final product should feel:
+
+fast
+modern
+lightweight
+realtime
+polished
+production-ready
+
+The application should resemble a real startup MVP rather than a tutorial project.
+
+Every feature should integrate cleanly into the architecture while maintaining simplicity, speed, and reliability.
