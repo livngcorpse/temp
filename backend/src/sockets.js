@@ -1,5 +1,7 @@
 let io = null;
 
+const { deleteStorageFile } = require('./storage');
+
 // Track uploader socket associations: { fileId: socketId }
 const uploaderSockets = new Map();
 
@@ -258,19 +260,13 @@ async function getFilesAboutToExpire() {
  * Emit expiration updates to all connected clients
  */
 async function deleteExpiredFile(fileId, fileName) {
-  const fs = require('fs');
-  const path = require('path');
   const pool = require('./db');
-  const uploadDir = path.join(__dirname, '../uploads');
-  const filePath = path.join(uploadDir, fileName);
 
-  if (fs.existsSync(filePath)) {
-    try {
-      fs.unlinkSync(filePath);
-      console.log(`[Expiration] Deleted expired file from filesystem: ${fileName}`);
-    } catch (err) {
-      console.error(`[Expiration] Failed to delete expired file from filesystem: ${fileName}`, err.message);
-    }
+  try {
+    await deleteStorageFile(fileName);
+    console.log(`[Expiration] Deleted expired file from cloud storage: ${fileName}`);
+  } catch (err) {
+    console.error(`[Expiration] Failed to delete expired file from cloud storage: ${fileName}`, err.message);
   }
 
   try {

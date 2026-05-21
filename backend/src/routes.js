@@ -14,6 +14,7 @@ const {
   startExpirationTracking,
   emitViewerCountUpdate,
 } = require('./sockets');
+const { uploadFileToStorage, getStorageFileStream } = require('./storage');
 const {
   isValidMimeType,
   validateFileSize,
@@ -71,13 +72,30 @@ router.post('/upload', validateUploadBody, upload.array('files', 10), validateFi
 
     for (const file of files) {
       const fileId = uuidv4();
+      const storageKey = file.filename;
+
+      try {
+        await uploadFileToStorage(file.path, storageKey, file.mimetype);
+      } catch (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+        return res.status(500).json({ error: 'Failed to store file in cloud storage' });
+      }
+
+      // Delete temporary local copy after successful upload
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+
       await pool.query(
         `INSERT INTO files (id, original_name, file_name, file_size, mime_type, expiration_timestamp, uploader_ip, password_hash)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           fileId,
           file.originalname,
-          file.filename,
+          storageKey,
           file.size,
           file.mimetype,
           expirationTime,
@@ -128,11 +146,6 @@ router.get('/file/:id', async (req, res) => {
     }
 
     const file = result.rows[0];
-    const filePath = path.join(__dirname, '../uploads', file.file_name);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-
     const now = new Date();
     const expiresAt = new Date(file.expiration_timestamp);
     const isExpired = now > expiresAt;
@@ -175,11 +188,6 @@ router.get('/file/:id/check-expiration', async (req, res) => {
     }
 
     const file = result.rows[0];
-    const filePath = path.join(__dirname, '../uploads', file.file_name);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'File not found', fileExists: false });
-    }
-
     const now = new Date();
     const expiresAt = new Date(file.expiration_timestamp);
     const isExpired = now > expiresAt;
@@ -291,11 +299,12 @@ router.get('/download/:id', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
 
-    const filePath = path.join(__dirname, '../uploads', file.file_name);
-
-    // Check if file exists on disk
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'File not found on server' });
+    let objectStream;
+    try {
+      objectStream = await getStorageFileStream(file.file_name);
+    } catch (storageError) {
+      console.error('Download storage error:', storageError);
+      return res.status(404).json({ error: 'File not found in cloud storage' });
     }
 
     // Set headers for download
@@ -303,11 +312,9 @@ router.get('/download/:id', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(file.original_name)}"`);
     res.setHeader('Content-Length', file.file_size);
 
-    // Stream the file
-    const stream = fs.createReadStream(filePath);
-    stream.pipe(res);
+    objectStream.pipe(res);
 
-    stream.on('error', (error) => {
+    objectStream.on('error', (error) => {
       console.error('Stream error:', error);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Failed to download file' });

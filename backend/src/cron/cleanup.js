@@ -1,18 +1,10 @@
 require('dotenv').config();
 const { Pool } = require('pg');
-const fs = require('fs');
-const path = require('path');
+const { deleteStorageFile } = require('../storage');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://localhost:5432/quickdrop',
 });
-
-const uploadDir = path.join(__dirname, '../uploads');
-
-// Ensure upload directory exists
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
 
 /**
  * Clean up expired files from database and filesystem
@@ -37,16 +29,11 @@ async function cleanupExpiredFiles() {
 
     // Delete each file from filesystem and database
     for (const file of result.rows) {
-      const filePath = path.join(uploadDir, file.file_name);
-
-      // Delete from filesystem
-      if (fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-          console.log(`[Cron] Deleted file from filesystem: ${file.file_name}`);
-        } catch (err) {
-          console.error(`[Cron] Failed to delete file from filesystem: ${file.file_name}`, err.message);
-        }
+      try {
+        await deleteStorageFile(file.file_name);
+        console.log(`[Cron] Deleted file from cloud storage: ${file.file_name}`);
+      } catch (err) {
+        console.error(`[Cron] Failed to delete file from cloud storage: ${file.file_name}`, err.message);
       }
 
       // Delete from database

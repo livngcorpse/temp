@@ -5,7 +5,6 @@ const cors = require('cors');
 const http = require('http');
 const pool = require('./db');
 const fileRoutes = require('./routes');
-const path = require('path');
 const { initializeCronJob } = require('./cron/cleanup');
 const { initializeSocket, initializeExpirationCheck } = require('./sockets');
 
@@ -94,9 +93,6 @@ app.use(setSecurityHeaders);
 app.use(logRequest);
 
 app.use(morgan('dev'));
-
-// Serve uploaded files statically
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
