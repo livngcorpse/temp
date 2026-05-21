@@ -1,34 +1,42 @@
-const { Pool, Client } = require('pg');
+const { Pool } = require('pg');
 require('dotenv').config();
 
 const dbUrl = process.env.DATABASE_URL || 'postgres://localhost:5432/quickdrop';
-const dbName = 'quickdrop';
+const useSsl = process.env.DB_SSL === 'true' || (!dbUrl.includes('localhost') && !dbUrl.includes('127.0.0.1') && !dbUrl.includes('::1'));
+const dbName = new URL(dbUrl).pathname.slice(1) || 'quickdrop';
+const isLocalDatabase = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1') || dbUrl.includes('::1');
 
 async function setupDatabase() {
-  // First, connect to postgres system database to create quickdrop database
-  const adminPool = new Pool({
-    connectionString: 'postgres://postgres:postgres@localhost:5432/postgres',
-  });
+  if (isLocalDatabase) {
+    // First, connect to postgres system database to create the local database if needed
+    const adminPool = new Pool({
+      connectionString: 'postgres://postgres:postgres@localhost:5432/postgres',
+    });
 
-  try {
-    console.log('Creating database if not exists...');
-    await adminPool.query(`CREATE DATABASE ${dbName}`);
-    console.log('✓ Database created');
-  } catch (error) {
-    // Check if it's "already exists" error (code 42P04)
-    if (error.code === '42P04') {
-      console.log('✓ Database already exists');
-    } else {
-      console.error('✗ Failed to create database:', error.message);
-      await adminPool.end();
-      process.exit(1);
+    try {
+      console.log('Creating database if not exists...');
+      await adminPool.query(`CREATE DATABASE ${dbName}`);
+      console.log('✓ Database created');
+    } catch (error) {
+      if (error.code === '42P04') {
+        console.log('✓ Database already exists');
+      } else {
+        console.error('✗ Failed to create database:', error.message);
+        await adminPool.end();
+        process.exit(1);
+      }
     }
+
+    await adminPool.end();
+  } else {
+    console.log('Skipping database creation for remote DATABASE_URL; only schema will be created.');
   }
 
-  await adminPool.end();
-
-  // Now connect to the quickdrop database to create tables
-  const pool = new Pool({ connectionString: dbUrl });
+  // Now connect to the target database to create tables
+  const pool = new Pool({
+    connectionString: dbUrl,
+    ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+  });
 
   try {
     console.log('Creating schema...');

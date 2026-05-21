@@ -1,10 +1,6 @@
 require('dotenv').config();
-const { Pool } = require('pg');
+const pool = require('../db');
 const { deleteStorageFile } = require('../storage');
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://localhost:5432/quickdrop',
-});
 
 /**
  * Clean up expired files from database and filesystem
