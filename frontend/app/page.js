@@ -10,7 +10,8 @@ export default function Home() {
 
   const checkApiStatus = async () => {
     try {
-      const response = await fetch('http://localhost:4000/api/health');
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${apiUrl}/health`);
       if (response.ok) {
         setApiStatus('ready');
       }
