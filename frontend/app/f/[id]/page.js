@@ -133,15 +133,17 @@ export default function FilePage({ params }) {
 
   // Countdown effect for expiration timer
   useEffect(() => {
-    if (!timeRemaining || timeRemaining <= 0) return;
+    if (timeRemaining == null) return;
 
     const countdown = setInterval(() => {
       setTimeRemaining((prev) => {
-        if (prev <= 0) {
-          clearInterval(countdown);
+        if (prev == null) return null;
+        const next = prev - 1000;
+        if (next <= 0) {
+          setExpirationStatus('expired');
           return 0;
         }
-        return prev - 1000;
+        return next;
       });
     }, 1000);
 
@@ -268,14 +270,14 @@ export default function FilePage({ params }) {
 
   // Prioritize server expiration data for live countdown (Phase 9)
   const getExpirationStatus = () => {
-    if (expirationStatus === 'expired') return 'expired';
+    if (expirationStatus === 'expired' || (timeRemaining != null && timeRemaining <= 0)) return 'expired';
 
-    // Use server-provided formatted time if available (Phase 9)
-    if (serverExpiration?.formattedTime) {
+    // Use server-provided formatted time (live updates from socket) when available
+    if (serverExpiration?.formattedTime && serverExpiration.timeRemaining > 0) {
       return `expires in ${serverExpiration.formattedTime}`;
     }
 
-    if (!timeRemaining || timeRemaining <= 0) {
+    if (timeRemaining == null || timeRemaining <= 0) {
       // Fallback to fileData if countdown is not yet ready
       if (!fileData?.expirationTimestamp) return null;
       const expiresAt = new Date(fileData.expirationTimestamp);
@@ -284,11 +286,11 @@ export default function FilePage({ params }) {
 
       if (diff <= 0) return 'expired';
 
-      if (diff < 3600000) { // Less than 1 hour
+      if (diff < 3600000) {
         const minutes = Math.ceil(diff / 60000);
         return `expires in ${minutes}m`;
       }
-      if (diff < 86400000) { // Less than 24 hours
+      if (diff < 86400000) {
         const hours = Math.ceil(diff / 3600000);
         return `expires in ${hours}h`;
       }

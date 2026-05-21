@@ -47,8 +47,8 @@ router.post('/upload', validateUploadBody, upload.array('files', 10), validateFi
 
     // Validate expiration time
     const minutes = parseInt(expirationMinutes, 10);
-    if (isNaN(minutes) || minutes < 1 || minutes > 43200) {
-      return res.status(400).json({ error: 'Invalid expiration time. Must be between 1 and 43200 minutes.' });
+    if (isNaN(minutes) || minutes < 1) {
+      return res.status(400).json({ error: 'Invalid expiration time. Must be at least 1 minute.' });
     }
 
     // Validate password if provided
@@ -128,6 +128,11 @@ router.get('/file/:id', async (req, res) => {
     }
 
     const file = result.rows[0];
+    const filePath = path.join(__dirname, '../uploads', file.file_name);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
     const now = new Date();
     const expiresAt = new Date(file.expiration_timestamp);
     const isExpired = now > expiresAt;
@@ -163,13 +168,18 @@ router.get('/file/:id/check-expiration', async (req, res) => {
       return res.status(400).json({ error: 'Invalid file ID format' });
     }
 
-    const result = await pool.query('SELECT expiration_timestamp FROM files WHERE id = $1', [id]);
+    const result = await pool.query('SELECT expiration_timestamp, file_name FROM files WHERE id = $1', [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'File not found', fileExists: false });
     }
 
     const file = result.rows[0];
+    const filePath = path.join(__dirname, '../uploads', file.file_name);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found', fileExists: false });
+    }
+
     const now = new Date();
     const expiresAt = new Date(file.expiration_timestamp);
     const isExpired = now > expiresAt;

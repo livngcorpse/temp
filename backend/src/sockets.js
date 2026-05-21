@@ -231,19 +231,19 @@ async function getFilesAboutToExpire() {
       return aboutToExpire;
     }
 
-    // Get files expiring within next 60 seconds that we're tracking
+    // Get files expiring within the next 60 seconds or already expired that we're tracking
     const trackedIds = Array.from(expirationTracking.keys()).map(id => `'${id}'`).join(',');
     const result = await pool.query(
       `SELECT id, expiration_timestamp FROM files
-       WHERE expiration_timestamp > NOW()
-       AND expiration_timestamp <= NOW() + INTERVAL '60 seconds'
+       WHERE expiration_timestamp <= NOW() + INTERVAL '60 seconds'
        AND id IN (${trackedIds})`
     );
 
     for (const row of result.rows) {
       const expiresAt = new Date(row.expiration_timestamp);
       const diff = expiresAt - now;
-      if (diff > 0 && diff <= 60000) {
+      // Include files that are about to expire within the next 60s or already expired
+      if (diff <= 60000) {
         aboutToExpire.push({ fileId: row.id, diff, expiresAt });
       }
     }
@@ -257,6 +257,30 @@ async function getFilesAboutToExpire() {
 /**
  * Emit expiration updates to all connected clients
  */
+async function deleteExpiredFile(fileId, fileName) {
+  const fs = require('fs');
+  const path = require('path');
+  const pool = require('./db');
+  const uploadDir = path.join(__dirname, '../uploads');
+  const filePath = path.join(uploadDir, fileName);
+
+  if (fs.existsSync(filePath)) {
+    try {
+      fs.unlinkSync(filePath);
+      console.log(`[Expiration] Deleted expired file from filesystem: ${fileName}`);
+    } catch (err) {
+      console.error(`[Expiration] Failed to delete expired file from filesystem: ${fileName}`, err.message);
+    }
+  }
+
+  try {
+    await pool.query('DELETE FROM files WHERE id = $1', [fileId]);
+    console.log(`[Expiration] Deleted expired file record: ${fileId}`);
+  } catch (err) {
+    console.error(`[Expiration] Failed to delete expired file record: ${fileId}`, err.message);
+  }
+}
+
 async function emitExpirationUpdates() {
   if (!io) return;
 
@@ -266,32 +290,34 @@ async function emitExpirationUpdates() {
     const hours = Math.floor(diff / 3600000);
     const minutes = Math.floor((diff % 3600000) / 60000);
     const seconds = Math.floor((diff % 60000) / 1000);
+    const formattedTime =
+      hours > 0
+        ? `${hours}h ${minutes}m ${seconds}s`
+        : minutes > 0
+        ? `${minutes}m ${seconds}s`
+        : `${seconds}s`;
 
-    io.to(fileId).emit('expirationUpdate', {
+    const payload = {
       fileId,
       timeRemaining: diff,
       isExpired: diff <= 0,
-      formattedTime:
-        hours > 0
-          ? `${hours}h ${minutes}m ${seconds}s`
-          : minutes > 0
-          ? `${minutes}m ${seconds}s`
-          : `${seconds}s`,
-    });
-    // Also notify uploader directly if present
+      formattedTime: diff <= 0 ? 'Expired' : formattedTime,
+    };
+
+    io.to(fileId).emit('expirationUpdate', payload);
     const uploaderSocketId = uploaderSockets.get(fileId);
     if (uploaderSocketId) {
-      io.to(uploaderSocketId).emit('expirationUpdate', {
-        fileId,
-        timeRemaining: diff,
-        isExpired: diff <= 0,
-        formattedTime:
-          hours > 0
-            ? `${hours}h ${minutes}m ${seconds}s`
-            : minutes > 0
-            ? `${minutes}m ${seconds}s`
-            : `${seconds}s`,
-      });
+      io.to(uploaderSocketId).emit('expirationUpdate', payload);
+    }
+
+    if (diff <= 0) {
+      // Immediately clean up files that have just expired rather than waiting for cron.
+      const pool = require('./db');
+      const result = await pool.query('SELECT file_name FROM files WHERE id = $1', [fileId]);
+      if (result.rows.length > 0) {
+        await deleteExpiredFile(fileId, result.rows[0].file_name);
+      }
+      stopExpirationTracking(fileId);
     }
   }
 }

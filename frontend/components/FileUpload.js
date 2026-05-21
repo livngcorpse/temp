@@ -10,7 +10,6 @@ const expirationOptions = [
   { value: 60, label: '1 hour', description: 'Automatic deletion in 1 hour' },
   { value: 1440, label: '24 hours', description: 'Automatic deletion in 24 hours' },
   { value: 10080, label: '7 days', description: 'Automatic deletion in 7 days' },
-  { value: 43200, label: '30 days', description: 'Automatic deletion in 30 days' },
 ];
 
 // Skeleton Loader Component
@@ -88,6 +87,8 @@ export default function FileUpload({ onUploadSuccess }) {
   const [shareUrls, setShareUrls] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedExpiration, setSelectedExpiration] = useState(60);
+  const [customExpiration, setCustomExpiration] = useState(60);
+  const [useCustomExpiration, setUseCustomExpiration] = useState(false);
   const [isPasswordProtected, setIsPasswordProtected] = useState(false);
   const [password, setPassword] = useState('');
   const [fileCountdowns, setFileCountdowns] = useState({}); // Track countdown per fileId
@@ -129,7 +130,8 @@ export default function FileUpload({ onUploadSuccess }) {
 
   // Helper to format a millisecond countdown into H:M:S or M:SS (matches download page)
   const formatCountdown = (ms) => {
-    if (ms == null || ms <= 0) return '0:00';
+    if (ms == null) return 'Unknown';
+    if (ms <= 0) return 'Expired';
     const totalSeconds = Math.floor(ms / 1000);
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -138,6 +140,35 @@ export default function FileUpload({ onUploadSuccess }) {
       return `${hours}h ${minutes}m ${String(seconds).padStart(2, '0')}s`;
     }
     return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  };
+
+  const validatePersistedUploadFiles = async (files) => {
+    const validFiles = [];
+
+    for (const file of files) {
+      try {
+        const response = await api.get(`/file/${file.fileId}`);
+        const data = response.data;
+
+        if (data.isExpired) {
+          continue;
+        }
+
+        validFiles.push({
+          fileId: data.id,
+          fileName: data.originalName,
+          fileSize: data.fileSize,
+          shareLink: `/f/${data.id}`,
+          expiresAt: data.expirationTimestamp || data.expiresAt,
+          downloadCount: data.downloadCount || 0,
+          passwordProtected: data.passwordProtected,
+        });
+      } catch (error) {
+        // Ignore invalid or missing files and do not restore stale state.
+      }
+    }
+
+    return validFiles;
   };
 
   const handleGenerateLink = async () => {
@@ -218,22 +249,31 @@ export default function FileUpload({ onUploadSuccess }) {
   // Load persisted uploaded files on mount so success screen survives reloads
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    try {
-      const raw = localStorage.getItem('qd_uploadedFiles');
-      if (raw) {
+
+    const loadPersistedFiles = async () => {
+      try {
+        const raw = localStorage.getItem('qd_uploadedFiles');
+        if (!raw) return;
+
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setUploadedFiles(parsed);
-          setShareUrls(parsed.map((file) => `${window.location.origin}${file.shareLink}`));
-          // register uploader sockets for persisted files
-          parsed.forEach((file) => {
-            registerUploader(file.fileId);
-          });
+        if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+        const validated = await validatePersistedUploadFiles(parsed);
+        if (!validated.length) {
+          localStorage.removeItem('qd_uploadedFiles');
+          return;
         }
+
+        setUploadedFiles(validated);
+        setShareUrls(validated.map((file) => `${window.location.origin}${file.shareLink}`));
+        validated.forEach((file) => registerUploader(file.fileId));
+        localStorage.setItem('qd_uploadedFiles', JSON.stringify(validated));
+      } catch (e) {
+        console.warn('Failed to load persisted uploaded files', e);
       }
-    } catch (e) {
-      console.warn('Failed to load persisted uploaded files', e);
-    }
+    };
+
+    loadPersistedFiles();
   }, [registerUploader]);
 
   // Re-register uploader when socket becomes available
@@ -520,7 +560,7 @@ export default function FileUpload({ onUploadSuccess }) {
             </div>
             <div className="text-center">
               <p className="text-xs text-slate-500">Expiration</p>
-              <p className="text-sm text-slate-100">{expirationOptions.find(o => o.value === selectedExpiration)?.label || 'Custom'}</p>
+              <p className="text-sm text-slate-100">{useCustomExpiration ? `${customExpiration} min` : expirationOptions.find(o => o.value === selectedExpiration)?.label || 'Custom'}</p>
             </div>
             <div className="text-center">
               <p className="text-xs text-slate-500">Viewers</p>
@@ -543,16 +583,19 @@ export default function FileUpload({ onUploadSuccess }) {
               <button
                 key={option.value}
                 type="button"
-                onClick={() => setSelectedExpiration(option.value)}
+                onClick={() => {
+                  setSelectedExpiration(option.value);
+                  setUseCustomExpiration(false);
+                }}
                 className={`flex flex-col items-start rounded-xl border p-3 text-left transition ${
-                  selectedExpiration === option.value
+                  !useCustomExpiration && selectedExpiration === option.value
                     ? 'border-sky-500/50 bg-sky-500/10 text-sky-100'
                     : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 text-slate-300'
                 }`}
               >
                 <span
                   className={`text-sm font-semibold ${
-                    selectedExpiration === option.value ? 'text-sky-400' : 'text-slate-300'
+                    !useCustomExpiration && selectedExpiration === option.value ? 'text-sky-400' : 'text-slate-300'
                   }`}
                 >
                   {option.label}
@@ -560,7 +603,44 @@ export default function FileUpload({ onUploadSuccess }) {
                 <span className="text-xs text-slate-500">{option.description}</span>
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => {
+                setUseCustomExpiration(true);
+                setSelectedExpiration(customExpiration);
+              }}
+              className={`flex flex-col items-start rounded-xl border p-3 text-left transition ${
+                useCustomExpiration
+                  ? 'border-sky-500/50 bg-sky-500/10 text-sky-100'
+                  : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 text-slate-300'
+              }`}
+            >
+              <span className={`text-sm font-semibold ${useCustomExpiration ? 'text-sky-400' : 'text-slate-300'}`}>
+                Custom
+              </span>
+              <span className="text-xs text-slate-500">Set any timer in minutes, starting at 1 min</span>
+            </button>
           </div>
+          {useCustomExpiration && (
+            <div className="mt-4 rounded-2xl bg-slate-950/50 p-4">
+              <label className="block text-sm font-medium text-slate-300">Custom timer (minutes)</label>
+              <div className="mt-3 flex items-center gap-3">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={customExpiration}
+                  onChange={(e) => {
+                    const minutes = Math.max(1, Number(e.target.value) || 1);
+                    setCustomExpiration(minutes);
+                    setSelectedExpiration(minutes);
+                  }}
+                  className="w-28 rounded-xl bg-slate-900 border border-slate-700 px-4 py-3 text-slate-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                />
+                <span className="text-sm text-slate-400">minutes</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Password Protection Toggle */}
