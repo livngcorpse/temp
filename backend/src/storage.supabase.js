@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { Readable } = require('stream');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
@@ -37,7 +38,9 @@ async function getStorageFileStream(key) {
   if (error) {
     throw error;
   }
-  return data;
+  // Convert Blob to Buffer to Node.js Readable stream
+  const buffer = await data.arrayBuffer();
+  return Readable.from(Buffer.from(buffer));
 }
 
 async function deleteStorageFile(key) {
